@@ -16,6 +16,13 @@ def connect_db(db_name):
 def before_request():
     g.db = connect_db(app.config['DATABASE'][1])
 
+'''
+@app.after_request
+def after_request():
+    pass
+    # do save/commit/close DB stuff here.
+    # g.db = connect_db(app.config['DATABASE'][1])
+'''
 
 def login_required(f):
     @wraps(f)
@@ -29,9 +36,6 @@ def login_required(f):
 
 # set the secret key.  keep this really secret:
 app.secret_key = 'A0Zr98j/3yX R~XHH!jmN]LWX/,?RT'
-
-
-
         
 # Check if user exists and hashed pass matches, if it does then set session
 # if not, then tell them user or pass does not exists. (tests line 73)
@@ -48,7 +52,7 @@ def login(): # jon
         # turn plaintext pass into md5 hash
         md5text = md5(plaintext).hexdigest() 
         # Sanitize SQL, then extract a single user object from DB.
-        userlist = g.db.execute('SELECT id, username, password FROM user where username = ?', (username,))
+        userlist = g.db.execute('SELECT id, username, password FROM user WHERE username = ?', (username,))
         # fetchone to pop the first instance matching above query.
         user = userlist.fetchone()
         if user and user[2] == md5text:
@@ -59,8 +63,6 @@ def login(): # jon
     flash('Invalid username or password')
     return render_template('login.html')
 
-# this should not be needed. need to figure out why.
-#username = ''
 
 @app.route('/')
 @login_required
@@ -80,10 +82,57 @@ def logout(): # jon
     return redirect(url_for('index'))
 
 @app.route('/profile', methods=['GET', 'POST'])  # prashant will try.
-@login_required
+@login_required  # unless we can view another users' profile.
 def profile():
-    #shows username, location, etc
-    pass
+    user_id = session['user_id'] # we know this is set because @login_required
+    
+    if request.method == 'POST':
+        # update the profile in the database
+        # copied over profile.html from static, updated for these variables:
+        username = request.form['username']
+        firstname = request.form['firstname']
+        lastname = request.form['lastname']
+        birthdate = request.form['birthdate']
+        
+        # sql command to update the database
+        g.db.execute(
+            'UPDATE user SET username = ?, first_name = ?, last_name = ?, birth_date = ? WHERE user_id = ?', 
+            (username, firstname, lastname, birthdate, user_id)
+        )
+        
+        
+    # View the profile
+    # fetch profile info from DB.  inverse of the update.
+    userdata = g.db.execute('SELECT username, firstname, lastname, birthdate FROM user WHERE id = ?', (user_id,))
+    # fetchone to pop the first instance matching above query.
+    user = userlist.fetchone() # indexable object
+    rendering_variables = [
+            user[0], # username
+            user[1], # first_name
+            user[2], # last_name
+            user[3]  # birthdate
+    ]
+    return render_template('profile.html', rendering_variables)
+
+
+# just playing around here! - jon
+def tweetdump(): # jon
+    # test function to just grab the tweet database, so I can learn how to 
+    # access stuff.
+    #tweetdumper = g.db.execute('SELECT id, user_id, created, content FROM tweet WHERE username = ?', (username,))
+    tweetdumper = g.db.execute('SELECT id, user_id, created, content FROM tweet')
+    # fetchone to pop the first instance matching above query.
+    for tweet in tweetdumper:
+        print(tweet)
+
+''' schema reminder
+  id INTEGER PRIMARY KEY autoincrement,
+  user_id INTEGER,
+  created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  content TEXT NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES user(id),
+'''
+
 
 
 @app.route('/<username>', methods=['GET', 'POST']) # lana will try.
@@ -94,8 +143,5 @@ def profile():
 # - Feed authenticated - get other users feed
 # - Feed authenticated - post
 # - Feed not authenticated - post
-def show_user_tweets():
-    
-    
-    
+def show_user_tweets(username):
     pass
